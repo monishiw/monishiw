@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#1b7a4a">
+<meta name="format-detection" content="telephone=no">
+<title>ミキホールディングス 日報入力アプリ</title>
+<style>
+/* レイアウト: 上から 店舗・名前 → カレンダー → 入力(マイク) → 本文 → 過去の日報 の一列構成 */
+:root {
+  --bg: #f6f7f4;
+  --surface: #ffffff;
+  --fg: #1f2a24;
+  --muted: #6b7a71;
+  --line: #dde3dd;
+  --accent: #1b7a4a;
+  --accent-soft: #e3f2e9;
+  --accent-fg: #ffffff;
+  --sun: #c8463d;
+  --sat: #2f62b8;
+  --danger: #b4382f;
+  --rec: #d2372f;
+  --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14191a; --surface: #1d2426; --fg: #e8ece9; --muted: #98a59d; --line: #2e3a35;
+    --accent: #3fae73; --accent-soft: #1f3a2d; --accent-fg: #0d1a13; --sun: #ef7b72; --sat: #7ea6ee;
+    --danger: #ef7b72; --rec: #ef5a51; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14191a; --surface: #1d2426; --fg: #e8ece9; --muted: #98a59d; --line: #2e3a35;
+  --accent: #3fae73; --accent-soft: #1f3a2d; --accent-fg: #0d1a13; --sun: #ef7b72; --sat: #7ea6ee;
+  --danger: #ef7b72; --rec: #ef5a51; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* ヘッダー */
+.appbar {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--accent); color: var(--accent-fg);
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
+}
+.appbar h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: 0.02em; }
+.appbar .sub { font-size: 12px; opacity: 0.85; }
+
+main { padding: 12px 16px 32px; display: grid; gap: 12px; max-width: 640px; margin: 0 auto; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+
+/* 店舗・名前 */
+.who { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field label { font-size: 12px; color: var(--muted); letter-spacing: 0.06em; }
+.field select, .field input {
+  width: 100%; min-height: 44px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+  -webkit-appearance: none; appearance: none;
+}
+.field select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 28px; }
+.addname { grid-column: 1 / -1; display: flex; gap: 8px; }
+.addname input { flex: 1; }
+.btn {
+  min-height: 44px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); font-weight: 600; white-space: nowrap;
+}
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+
+/* カレンダー */
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.cal-head .month { font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; }
+.cal-head .nav { display: flex; gap: 4px; }
+.cal-head .nav button { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); font-size: 18px; }
+.cal-head .nav .today-btn { width: auto; height: 40px; min-height: 40px; border-radius: 999px; font-size: 13px; padding: 0 12px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-grid .dow { text-align: center; font-size: 11px; color: var(--muted); padding: 4px 0; }
+.cal-grid .dow.sun, .cal-grid .day.sun { color: var(--sun); }
+.cal-grid .dow.sat, .cal-grid .day.sat { color: var(--sat); }
+.cal-grid .day {
+  position: relative; aspect-ratio: 1 / 1; max-width: 100%;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%; background: transparent; font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.cal-grid .day.other { opacity: 0.3; }
+.cal-grid .day.today { font-weight: 700; box-shadow: inset 0 0 0 1.5px var(--accent); }
+.cal-grid .day.selected { background: var(--accent); color: var(--accent-fg) !important; }
+.cal-grid .day .dot {
+  position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%);
+  width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+}
+.cal-grid .day.selected .dot { background: var(--accent-fg); }
+.cal-grid .day.future { opacity: 0.35; }
+
+/* 入力 */
+.entry-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.entry-head .date { font-weight: 700; font-size: 17px; }
+.entry-head .meta { font-size: 12px; color: var(--muted); }
+.mic-row { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; margin: 10px 0; }
+.mic {
+  width: 72px; height: 72px; border-radius: 50%; border: 0;
+  background: var(--accent); color: var(--accent-fg);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+  transition: transform 0.15s ease, background 0.2s ease;
+}
+.mic:active { transform: scale(0.95); }
+.mic svg { width: 32px; height: 32px; fill: currentColor; }
+.mic.listening { background: var(--rec); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(210,55,47,0.45); } 50% { box-shadow: 0 0 0 14px rgba(210,55,47,0); } }
+@media (prefers-reduced-motion: reduce) { .mic.listening { animation: none; } }
+.mic:disabled { background: var(--muted); box-shadow: none; }
+.mic-status { min-width: 0; }
+.mic-status .st { font-weight: 600; }
+.mic-status .hint { font-size: 12px; color: var(--muted); }
+.mic-status .interim { font-size: 13px; color: var(--muted); font-style: italic; min-height: 1.3em; overflow-wrap: anywhere; }
+textarea#report {
+  width: 100%; min-height: 160px; resize: vertical; padding: 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+  line-height: 1.6;
+}
+.actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.actions .spacer { flex: 1; }
+.saved { font-size: 12px; color: var(--muted); align-self: center; }
+
+/* 過去の日報 */
+.hist-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hist-head h2 { margin: 0; font-size: 15px; }
+.hist-head .count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hist { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.hist li button {
+  width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg); display: grid; gap: 2px;
+}
+.hist .d { font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; }
+.hist .d small { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.hist .t { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hist .body { display: none; margin-top: 6px; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg); }
+.hist li.open .body { display: block; }
+.hist li.open .t { display: none; }
+.empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%) translateY(20px);
+  background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 14px;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; z-index: 20; max-width: calc(100% - 32px);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; color: var(--danger); }
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <h1>ミキホールディングス 日報入力アプリ</h1>
+  <div class="sub">店舗・名前を選び、マイクで話すと日報が文字になります</div>
+</header>
+
+<main>
+  <!-- 店舗・名前 -->
+  <section class="card who" aria-label="店舗と名前">
+    <div class="field">
+      <label for="store">店舗</label>
+      <select id="store"></select>
+    </div>
+    <div class="field">
+      <label for="name">名前</label>
+      <select id="name"></select>
+    </div>
+    <div class="addname" id="addname" hidden>
+      <input id="newname" type="text" placeholder="氏名を入力（例: 佐藤 花子）" autocomplete="off" enterkeyhint="done">
+      <button class="btn primary" id="addname-ok" type="button">追加</button>
+      <button class="btn ghost" id="addname-cancel" type="button">やめる</button>
+    </div>
+  </section>
+
+  <!-- カレンダー -->
+  <section class="card" aria-label="カレンダー">
+    <div class="cal-head">
+      <div class="month" id="cal-month"></div>
+      <div class="nav">
+        <button class="btn ghost today-btn" id="cal-today" type="button">今日</button>
+        <button id="cal-prev" type="button" aria-label="前の月">‹</button>
+        <button id="cal-next" type="button" aria-label="次の月">›</button>
+      </div>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+  </section>
+
+  <!-- 入力 -->
+  <section class="card" aria-label="日報入力">
+    <div class="entry-head">
+      <div class="date" id="entry-date"></div>
+      <div class="meta" id="entry-meta"></div>
+    </div>
+    <div class="mic-row">
+      <button class="mic" id="mic" type="button" aria-pressed="false" aria-label="音声入力を開始">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+      </button>
+      <div class="mic-status">
+        <div class="st" id="mic-st">タップして話す</div>
+        <div class="hint" id="mic-hint">話し終えたらもう一度タップで停止。文字は下に追記されます。</div>
+        <div class="interim" id="mic-interim"></div>
+      </div>
+    </div>
+    <textarea id="report" placeholder="ここに日報が表示されます。直接入力・修正もできます。"></textarea>
+    <div class="actions">
+      <button class="btn primary" id="save" type="button">保存</button>
+      <span class="saved" id="saved-at"></span>
+      <span class="spacer"></span>
+      <button class="btn danger ghost" id="delete" type="button">この日の日報を削除</button>
+    </div>
+    <div class="confirm" id="confirm" hidden>
+      <span>削除しますか？</span>
+      <button class="btn danger" id="confirm-yes" type="button">削除する</button>
+      <button class="btn ghost" id="confirm-no" type="button">やめる</button>
+    </div>
+  </section>
+
+  <!-- 過去の日報 -->
+  <section class="card" aria-label="過去の日報">
+    <div class="hist-head">
+      <h2 id="hist-title">過去の日報</h2>
+      <span class="count" id="hist-count"></span>
+    </div>
+    <ul class="hist" id="hist"></ul>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- 店舗（山手線 全30駅） ----------
+  var STATIONS = ['東京','神田','秋葉原','御徒町','上野','鶯谷','日暮里','西日暮里','田端','駒込',
+    '巣鴨','大塚','池袋','目白','高田馬場','新大久保','新宿','代々木','原宿','渋谷',
+    '恵比寿','目黒','五反田','大崎','品川','高輪ゲートウェイ','田町','浜松町','新橋','有楽町'];
+  var STORES = STATIONS.map(function (s) { return s + '店'; });
+  var DOW = ['日','月','火','水','木','金','土'];
+
+  // ---------- 保存（この端末のブラウザ内） ----------
+  var KEY = 'mikihd-nippo-v1';
+  var state = load();
+  function load() {
+    var def = { reports: {}, names: [], store: STORES[0], name: '' };
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return def;
+      var o = JSON.parse(raw);
+      return {
+        reports: o.reports || {},
+        names: Array.isArray(o.names) ? o.names : [],
+        store: STORES.indexOf(o.store) >= 0 ? o.store : STORES[0],
+        name: typeof o.name === 'string' ? o.name : ''
+      };
+    } catch (e) { return def; }
+  }
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { toast('保存できませんでした（ブラウザの保存領域が使えません）'); }
+  }
+  function rkey(date) { return state.store + '|' + state.name + '|' + date; }
+
+  // ---------- 日付ユーティリティ ----------
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function parse(s) { var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function fmtJa(s) { var d = parse(s); return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日（' + DOW[d.getDay()] + '）'; }
+  function fmtTime(ts) { var d = new Date(ts); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+
+  var today = ymd(new Date());
+  var selected = today;
+  var viewY = parse(today).getFullYear(), viewM = parse(today).getMonth();
+
+  // ---------- 要素 ----------
+  var $ = function (id) { return document.getElementById(id); };
+  var storeSel = $('store'), nameSel = $('name'), addRow = $('addname'), newName = $('newname');
+  var calMonth = $('cal-month'), calGrid = $('cal-grid');
+  var entryDate = $('entry-date'), entryMeta = $('entry-meta');
+  var micBtn = $('mic'), micSt = $('mic-st'), micHint = $('mic-hint'), micInterim = $('mic-interim');
+  var ta = $('report'), savedAt = $('saved-at');
+  var hist = $('hist'), histCount = $('hist-count'), histTitle = $('hist-title');
+  var confirmRow = $('confirm');
+
+  // ---------- 店舗・名前 ----------
+  function renderStores() {
+    storeSel.innerHTML = '';
+    STORES.forEach(function (s) {
+      var o = document.createElement('option'); o.value = s; o.textContent = s; storeSel.appendChild(o);
+    });
+    storeSel.value = state.store;
+  }
+  function renderNames() {
+    nameSel.innerHTML = '';
+    var ph = document.createElement('option'); ph.value = ''; ph.textContent = state.names.length ? '名前を選択' : '名前を追加してください';
+    nameSel.appendChild(ph);
+    state.names.forEach(function (n) {
+      var o = document.createElement('option'); o.value = n; o.textContent = n; nameSel.appendChild(o);
+    });
+    var add = document.createElement('option'); add.value = '__add__'; add.textContent = '＋ 名前を追加…'; nameSel.appendChild(add);
+    nameSel.value = state.names.indexOf(state.name) >= 0 ? state.name : '';
+  }
+  storeSel.addEventListener('change', function () {
+    stopListening();
+    state.store = storeSel.value; persist(); renderAll();
+  });
+  nameSel.addEventListener('change', function () {
+    if (nameSel.value === '__add__') {
+      addRow.hidden = false; newName.value = ''; newName.focus();
+      nameSel.value = state.names.indexOf(state.name) >= 0 ? state.name : '';
+      return;
+    }
+    stopListening();
+    state.name = nameSel.value; persist(); renderAll();
+  });
+  function commitNewName() {
+    var n = newName.value.trim().replace(/\s+/g, ' ');
+    if (!n) { newName.focus(); return; }
+    if (state.names.indexOf(n) < 0) state.names.push(n);
+    state.name = n; addRow.hidden = true; persist(); renderAll();
+    toast(n + ' さんを追加しました');
+  }
+  $('addname-ok').addEventListener('click', commitNewName);
+  newName.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); commitNewName(); } });
+  $('addname-cancel').addEventListener('click', function () { addRow.hidden = true; });
+
+  // ---------- カレンダー ----------
+  function hasReport(date) { var r = state.reports[rkey(date)]; return !!(r && r.text && r.text.trim()); }
+  function renderCalendar() {
+    calMonth.textContent = viewY + '年' + (viewM + 1) + '月';
+    calGrid.innerHTML = '';
+    DOW.forEach(function (d, i) {
+      var el = document.createElement('div'); el.className = 'dow' + (i === 0 ? ' sun' : i === 6 ? ' sat' : ''); el.textContent = d; calGrid.appendChild(el);
+    });
+    var first = new Date(viewY, viewM, 1);
+    var start = new Date(viewY, viewM, 1 - first.getDay());
+    for (var i = 0; i < 42; i++) {
+      var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      if (i >= 35 && d.getMonth() !== viewM) break;
+      var s = ymd(d);
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'day' + (d.getDay() === 0 ? ' sun' : d.getDay() === 6 ? ' sat' : '')
+        + (d.getMonth() !== viewM ? ' other' : '') + (s === today ? ' today' : '') + (s === selected ? ' selected' : '') + (s > today ? ' future' : '');
+      b.textContent = d.getDate();
+      b.setAttribute('aria-label', fmtJa(s) + (hasReport(s) ? ' 日報あり' : ''));
+      if (s === selected) b.setAttribute('aria-current', 'date');
+      if (hasReport(s)) { var dot = document.createElement('span'); dot.className = 'dot'; b.appendChild(dot); }
+      b.dataset.date = s;
+      calGrid.appendChild(b);
+    }
+  }
+  calGrid.addEventListener('click', function (e) {
+    var b = e.target.closest('.day'); if (!b) return;
+    selectDate(b.dataset.date);
+  });
+  $('cal-prev').addEventListener('click', function () { viewM--; if (viewM < 0) { viewM = 11; viewY--; } renderCalendar(); });
+  $('cal-next').addEventListener('click', function () { viewM++; if (viewM > 11) { viewM = 0; viewY++; } renderCalendar(); });
+  $('cal-today').addEventListener('click', function () { selectDate(today); });
+  function selectDate(s) {
+    if (s !== selected) stopListening();
+    selected = s;
+    var d = parse(s); viewY = d.getFullYear(); viewM = d.getMonth();
+    confirmRow.hidden = true;
+    renderAll();
+  }
+
+  // ---------- 入力欄 ----------
+  function renderEntry() {
+    entryDate.textContent = fmtJa(selected) + (selected === today ? '  今日' : '');
+    entryMeta.textContent = state.store + (state.name ? ' ／ ' + state.name : ' ／ 名前未選択');
+    var r = state.reports[rkey(selected)];
+    ta.value = r ? r.text : '';
+    savedAt.textContent = r && r.updatedAt ? '最終保存 ' + fmtTime(r.updatedAt) : '';
+    var ok = !!state.name;
+    ta.disabled = !ok; micBtn.disabled = !ok || !Recognition; $('save').disabled = !ok; $('delete').disabled = !ok || !r;
+    if (!ok) { micSt.textContent = '先に名前を選んでください'; micHint.textContent = '上の「名前」から選択、または追加できます。'; }
+    else if (!Recognition) { micSt.textContent = 'このブラウザは音声入力に未対応です'; micHint.textContent = 'iPhone では Safari で開いてください。文字入力は使えます。'; }
+    else if (!listening) { micSt.textContent = 'タップして話す'; micHint.textContent = '話し終えたらもう一度タップで停止。文字は下に追記されます。'; }
+  }
+  var saveTimer = null;
+  ta.addEventListener('input', function () {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () { saveReport(false); }, 500);
+  });
+  function saveReport(announce) {
+    if (!state.name) return;
+    var text = ta.value;
+    var k = rkey(selected);
+    if (text.trim()) {
+      state.reports[k] = { text: text, updatedAt: Date.now(), store: state.store, name: state.name, date: selected };
+    } else {
+      delete state.reports[k];
+    }
+    persist();
+    var r = state.reports[k];
+    savedAt.textContent = r ? '最終保存 ' + fmtTime(r.updatedAt) : '';
+    $('delete').disabled = !r;
+    renderCalendar(); renderHistory();
+    if (announce) toast(r ? '保存しました' : '内容が空のため削除しました');
+  }
+  $('save').addEventListener('click', function () { clearTimeout(saveTimer); stopListening(); saveReport(true); });
+  $('delete').addEventListener('click', function () { confirmRow.hidden = false; });
+  $('confirm-no').addEventListener('click', function () { confirmRow.hidden = true; });
+  $('confirm-yes').addEventListener('click', function () {
+    stopListening();
+    delete state.reports[rkey(selected)]; persist(); confirmRow.hidden = true; renderAll(); toast('削除しました');
+  });
+
+  // ---------- 音声入力（Web Speech API / iOS Safari の webkitSpeechRecognition） ----------
+  var Recognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  var rec = null, listening = false, baseText = '';
+  function setListeningUI(on) {
+    listening = on;
+    micBtn.classList.toggle('listening', on);
+    micBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    micBtn.setAttribute('aria-label', on ? '音声入力を停止' : '音声入力を開始');
+    if (on) { micSt.textContent = '聞き取り中…'; micHint.textContent = 'もう一度タップで停止します。'; }
+    else { micInterim.textContent = ''; renderEntry(); }
+  }
+  function startListening() {
+    if (!Recognition || !state.name) return;
+    try {
+      rec = new Recognition();
+      rec.lang = 'ja-JP';
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.maxAlternatives = 1;
+      baseText = ta.value;
+      var sep = baseText && !/\n$/.test(baseText) ? '\n' : '';
+      rec.onresult = function (e) {
+        // iOS Safari は results を累積で返すため、毎回全件から組み立て直す
+        var fin = '', interim = '';
+        for (var i = 0; i < e.results.length; i++) {
+          var t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) fin += t; else interim += t;
+        }
+        ta.value = baseText + (fin ? sep + fin : '');
+        micInterim.textContent = interim;
+        ta.scrollTop = ta.scrollHeight;
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(function () { saveReport(false); }, 800);
+      };
+      rec.onerror = function (e) {
+        var code = e && e.error;
+        if (code === 'not-allowed' || code === 'service-not-allowed') {
+          toast('マイクの使用が許可されていません。設定 › Safari でマイクを許可してください');
+        } else if (code === 'no-speech') {
+          toast('音声が聞き取れませんでした');
+        } else if (code !== 'aborted') {
+          toast('音声入力でエラーが起きました（' + code + '）');
+        }
+      };
+      rec.onend = function () { rec = null; setListeningUI(false); saveReport(false); };
+      rec.start();
+      setListeningUI(true);
+    } catch (err) {
+      rec = null; setListeningUI(false); toast('音声入力を開始できませんでした');
+    }
+  }
+  function stopListening() {
+    if (rec) { try { rec.stop(); } catch (e) { /* noop */ } }
+  }
+  micBtn.addEventListener('click', function () { if (listening) stopListening(); else startListening(); });
+
+  // ---------- 過去の日報 ----------
+  function renderHistory() {
+    hist.innerHTML = '';
+    histTitle.textContent = '過去の日報' + (state.name ? '（' + state.store + ' ／ ' + state.name + '）' : '');
+    if (!state.name) { histCount.textContent = ''; hist.innerHTML = '<li class="empty">名前を選ぶと、その方の過去の日報が表示されます。</li>'; return; }
+    var list = Object.keys(state.reports).map(function (k) { return state.reports[k]; })
+      .filter(function (r) { return r.store === state.store && r.name === state.name && r.text && r.text.trim(); })
+      .sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+    histCount.textContent = list.length ? list.length + ' 件' : '';
+    if (!list.length) { hist.innerHTML = '<li class="empty">まだ日報がありません。カレンダーで日付を選び、マイクで話してください。</li>'; return; }
+    list.forEach(function (r) {
+      var li = document.createElement('li');
+      var b = document.createElement('button'); b.type = 'button';
+      var d = document.createElement('div'); d.className = 'd'; d.textContent = fmtJa(r.date);
+      if (r.date === selected) { var sm = document.createElement('small'); sm.textContent = '表示中'; d.appendChild(sm); }
+      var t = document.createElement('div'); t.className = 't'; t.textContent = r.text.replace(/\s+/g, ' ').trim();
+      var body = document.createElement('div'); body.className = 'body'; body.textContent = r.text;
+      b.appendChild(d); b.appendChild(t); b.appendChild(body);
+      b.addEventListener('click', function () {
+        if (li.classList.contains('open')) { selectDate(r.date); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+        else { li.classList.add('open'); }
+      });
+      li.appendChild(b); hist.appendChild(li);
+    });
+  }
+
+  // ---------- 共通 ----------
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
+  }
+  function renderAll() { renderStores(); renderNames(); renderCalendar(); renderEntry(); renderHistory(); }
+
+  // 日付が変わったとき（翌日に開き直した場合）の「今日」更新
+  setInterval(function () {
+    var now = ymd(new Date());
+    if (now !== today) { today = now; renderCalendar(); renderEntry(); }
+  }, 60 * 1000);
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
