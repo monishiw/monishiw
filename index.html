@@ -398,7 +398,7 @@ textarea#report {
     var ok = !!state.name;
     ta.disabled = !ok; micBtn.disabled = !ok || !Recognition; $('save').disabled = !ok; $('delete').disabled = !ok || !r;
     if (!ok) { micSt.textContent = '先に名前を選んでください'; micHint.textContent = '上の「名前」から選択、または追加できます。'; }
-    else if (!Recognition) { micSt.textContent = 'このブラウザは音声入力に未対応です'; micHint.textContent = 'iPhone では Safari で開いてください。文字入力は使えます。'; }
+    else if (!Recognition) { micSt.textContent = 'このブラウザは音声入力に未対応です'; micHint.textContent = 'Chrome・Edge・Safari で開いてください。文字入力は使えます。'; }
     else if (!listening) { micSt.textContent = 'タップして話す'; micHint.textContent = '話し終えたらもう一度タップで停止。文字は下に追記されます。'; }
   }
   var saveTimer = null;
@@ -467,7 +467,7 @@ textarea#report {
       rec.onerror = function (e) {
         var code = e && e.error;
         if (code === 'not-allowed' || code === 'service-not-allowed') {
-          toast('マイクの使用が許可されていません。設定 › Safari でマイクを許可してください');
+          toast('マイクの使用が許可されていません。ブラウザの設定でこのサイトのマイクを許可してください');
         } else if (code === 'no-speech') {
           toast('音声が聞き取れませんでした');
         } else if (code !== 'aborted') {
