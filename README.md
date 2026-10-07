@@ -10,7 +10,11 @@
 - **日報の表示・編集**: 画面下部に文字として表示。手入力での修正、保存、削除もできます。
 - **過去の日報**: 選択中の店舗・名前の過去の日報を新しい順に一覧表示。タップで全文、もう一度タップでその日に移動。
 
-## 公開方法（GitHub Pages）
+## 本番（Vercel）
+
+本番は Vercel で公開しています。GitHub の `nippo` ブランチが本番ブランチで、`nippo` にプッシュすると自動でデプロイされます。開発は `claude/dreamy-mendel-w2p2tt` ブランチで行い、本番に反映するときに `nippo` へ取り込みます。
+
+## 公開方法（GitHub Pages を使う場合）
 
 1. GitHub のリポジトリで **Settings › Pages** を開く
 2. Source を「Deploy from a branch」、Branch を公開したいブランチ（例: `main`）の `/ (root)` にして保存
