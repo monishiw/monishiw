@@ -1,7 +1,7 @@
 """合成の免許証データを生成して DuckDB に投入する。
 
 使い方:
-    python scripts/generate_data.py --n 1000000          # 100万件
+    python scripts/generate_data.py --n 1065601          # 全件（1,065,601 件）
     python scripts/generate_data.py --n 50000 --images 200
 
 全て架空データ。氏名・番号・住所はランダム生成で実在の人物とは無関係。
@@ -165,7 +165,7 @@ def generate(n: int, seed: int = 42, today: pd.Timestamp | None = None) -> pd.Da
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--n", type=int, default=1_000_000)
+    ap.add_argument("--n", type=int, default=1_065_601)
     ap.add_argument("--images", type=int, default=100, help="事前生成する画像枚数（残りはオンデマンド生成）")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--replace", action="store_true", help="既存データを削除して再生成")

@@ -442,7 +442,7 @@ async def import_csv(file: UploadFile = File(...)):
 
 
 @app.get("/api/export.csv")
-def export_csv(f: db.Filters = Depends(_filters), limit: int = Query(100000, le=1_000_000)):
+def export_csv(f: db.Filters = Depends(_filters), limit: int = Query(100000, le=2_000_000)):
     def gen():
         buf = io.StringIO()
         w = csv.writer(buf)

@@ -1,6 +1,6 @@
 # 運転免許証データ 分析・管理アプリ
 
-運転免許証の数値データ（100万件規模）と免許証画像を管理し、地域（都道府県地図）・年齢・免許種類・免許証の色などから現状と将来（10年後など）を多面的に分析する Web アプリケーションです。生成AI（OpenAI GPT）が人口推計と組み合わせて複数シナリオと事業機会を提示します。
+運転免許証の数値データ（1,065,601 件）と免許証画像を管理し、地域（都道府県地図）・年齢・免許種類・免許証の色などから現状と将来（10年後など）を多面的に分析する Web アプリケーションです。生成AI（OpenAI GPT）が人口推計と組み合わせて複数シナリオと事業機会を提示します。
 
 ## 画面
 
@@ -21,7 +21,7 @@
 
 `web/index.html` を開くだけで動作する版も同梱しています。Python もサーバーも不要で、GitHub Pages や Vercel などの静的ホスティングにそのまま置けます。
 
-- 初回起動時に件数（10万／30万／100万件）を選ぶと、合成データをブラウザ内で生成します（100万件で約3秒）。
+- 初回起動時に件数（10万／30万／1,065,601 件）を選ぶと、合成データをブラウザ内で生成します（1,065,601 件で約4秒）。
 - 集計・地図・将来推計・免許証画像の生成・CSV 入出力はすべてブラウザ内（JavaScript + TypedArray）で動作し、編集・追加・削除・アップロード画像は IndexedDB に保存されて再読み込み後も残ります。
 - 生成AI 分析は右上の「AI設定」に OpenAI API キー（とモデル名）を入れると有効になります（ブラウザから api.openai.com を直接呼び出し。キーは端末の localStorage のみに保存）。未設定時はルールベースの簡易分析で応答します。
 - 外部 CDN には依存しません（地図ライブラリ・境界データを同梱）。地図の背景タイル（国土地理院）だけはインターネット接続時に表示されます。
@@ -55,12 +55,12 @@ license-analytics/
 │   └── constants.py     免許種類・色・年齢階級の定義
 ├── static/              index.html / app.js（Leaflet + Chart.js）, japan.topojson, vendor/
 ├── web/                 ブラウザ版（engine.js がデータ生成・集計・推計・AI 呼び出しを担当。サーバー不要）
-├── scripts/generate_data.py   合成データ生成（100万件）
+├── scripts/generate_data.py   合成データ生成（既定 1,065,601 件）
 ├── data/                DuckDB ファイル・画像（git 管理外）、CSV テンプレート
 └── tests/test_app.py    API 結合テスト
 ```
 
-- **DB**: DuckDB 1 ファイル。100万件で主要集計 20〜40ms、地図集計 0.2s、全シナリオ推計 4s（結果はキャッシュ）。
+- **DB**: DuckDB 1 ファイル。1,065,601 件で主要集計 20〜40ms、地図集計 0.2s、全シナリオ推計 4s（結果はキャッシュ）。
 - **画像**: `data/images/` にファイル保存し DB にパスを持つ。実運用ではスキャン画像を置き換えて使う。
 - **地図**: 都道府県境界 TopoJSON（dataofjapan/land）を内蔵描画し、背景に国土地理院の淡色地図タイル（API キー不要）を重ねる。タイルが取得できない環境では内蔵描画のみで表示。CDN に出られない閉域網でも動くようライブラリは `static/vendor/` に同梱。
 
@@ -69,7 +69,7 @@ license-analytics/
 ```bash
 cd license-analytics
 pip install -r requirements.txt
-python scripts/generate_data.py --n 1000000 --images 200   # 合成データ 100万件（約40秒）
+python scripts/generate_data.py --n 1065601 --images 200   # 合成データ 1,065,601 件（約45秒）
 export OPENAI_API_KEY=sk-...                                 # 任意。無い場合は簡易分析で動作
 uvicorn app.main:app --reload --port 8000
 ```
