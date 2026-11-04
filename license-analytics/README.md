@@ -27,6 +27,12 @@
 cd license-analytics/web && python -m http.server 8080   # → http://localhost:8080/
 ```
 
+### Vercel での公開（`menkyo` ブランチ）
+
+GitHub の `menkyo` ブランチが Vercel 公開用です。リポジトリ直下の `vercel.json` が `/` を `/license-analytics/web/` にリダイレクトするので、Vercel プロジェクトの Production Branch を `menkyo` にすると、プロジェクトの URL を開くだけでブラウザ版が表示されます（ビルド設定は不要。Framework Preset は「Other」、Build Command・Output Directory は空のまま）。
+
+更新手順: 開発ブランチで変更をコミット → `git checkout menkyo && git merge <開発ブランチ> && git push origin menkyo` → Vercel が自動デプロイ。
+
 GitHub Pages で公開する場合は Settings › Pages でこのブランチを選び、`https://<ユーザー名>.github.io/<リポジトリ名>/license-analytics/web/` を開きます。
 
 機能はサーバー版と同じです。サーバー版は複数人での共有・実データ接続・大規模運用向け、ブラウザ版はデモ・個人利用向けです。
