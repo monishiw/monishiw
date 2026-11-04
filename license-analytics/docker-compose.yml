@@ -1,0 +1,8 @@
+services:
+  app:
+    build: .
+    ports: ["8000:8000"]
+    volumes: ["./data:/data"]
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - LICENSE_AI_MODEL=${LICENSE_AI_MODEL:-claude-opus-5-5}

@@ -1,0 +1,2 @@
+license_no,name,name_kana,sex,birth_date,prefecture_code,municipality,address,license_type,license_types,color,conditions,issue_date,expiry_date,first_issue_year,violation_points,ocr_confidence,status
+1312345678901,見本 太郎,ミホン タロウ,男性,1985-04-01,13,千代田区,東京都千代田区丸の内1-1-1,普通,"普通,普通二輪",ゴールド,眼鏡等,2024-05-10,2029-06-09,2004,0,0.98,有効
