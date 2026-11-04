@@ -298,7 +298,7 @@ window.Engine = (() => {
   async function importCsv(text) { const recs = parseCsv(text); let n = 0; const errors = []; for (let i = 0; i < recs.length; i++) { try { const r = recs[i]; const d = {}; for (const k of COLUMNS) if (r[k] !== undefined && r[k] !== "" && !["id", "age", "updated_at", "image_path"].includes(k)) d[k] = r[k]; ["prefecture_code", "first_issue_year", "violation_points"].forEach((k) => { if (d[k] != null) d[k] = parseInt(d[k], 10); }); if (d.ocr_confidence != null) d.ocr_confidence = parseFloat(d.ocr_confidence); for (const k of ["license_no", "name", "sex", "birth_date", "prefecture_code", "license_type", "color", "issue_date", "expiry_date"]) if (d[k] == null || Number.isNaN(d[k])) throw new Error(k + " が未入力"); await create(d); n++; } catch (e) { errors.push({ line: i + 2, error: e.message }); } } return { imported: n, errors: errors.slice(0, 50), error_count: errors.length }; }
 
   // ------------------------------------------------------------------ AI
-  const DEFAULT_MODEL = "gpt-4.1";
+  const DEFAULT_MODEL = "gpt-5";
   function model() { try { return localStorage.getItem("openai_model") || DEFAULT_MODEL; } catch { return DEFAULT_MODEL; } }
   function setModel(m) { try { if (m) localStorage.setItem("openai_model", m); else localStorage.removeItem("openai_model"); } catch {} }
   const SYSTEM_PROMPT = `あなたは自動車関連事業（販売・整備・保険・レンタカー・教習所・モビリティサービス）の戦略コンサルタント兼データアナリストです。運転免許証データベースの集計結果と、国立社会保障・人口問題研究所の地域別将来人口推計を組み合わせて、地域の将来像を分析します。

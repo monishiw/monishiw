@@ -368,8 +368,8 @@
   function openAiSettings() {
     $('#modal-body').innerHTML = `<h3>AI 設定<button class="btn sm close" id="m-close">閉じる</button></h3>
       <div class="field"><label>OpenAI API キー</label><input type="password" id="ai-key" value="${esc(Engine.apiKey())}" placeholder="sk-..."></div>
-      <div class="field" style="margin-top:8px"><label>モデル</label><input type="text" id="ai-model" value="${esc(Engine.model())}" placeholder="gpt-4.1"></div>
-      <p class="note" style="margin-top:8px">キーはこのブラウザの localStorage にのみ保存され、api.openai.com に直接送信されます（サーバーは経由しません）。共有端末では使用後に削除してください。モデルは構造化出力（JSON Schema）に対応したもの（gpt-4.1 / gpt-4o / gpt-5 系など）を指定してください。</p>
+      <div class="field" style="margin-top:8px"><label>モデル</label><input type="text" id="ai-model" value="${esc(Engine.model())}" placeholder="gpt-5"></div>
+      <p class="note" style="margin-top:8px">キーはこのブラウザの localStorage にのみ保存され、api.openai.com に直接送信されます（サーバーは経由しません）。共有端末では使用後に削除してください。モデルは構造化出力（JSON Schema）に対応したもの（gpt-5 系、gpt-4.1 など）を指定してください。</p>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn danger" id="m-clear">削除</button><button class="btn primary" id="m-save">保存</button></div>`;
     $('#modal').classList.add('open'); $('#m-close').onclick = closeModal;
     $('#m-save').onclick = () => { Engine.setApiKey($('#ai-key').value.trim()); Engine.setModel($('#ai-model').value.trim()); updateAiPill(); closeModal(); toast('保存しました'); };

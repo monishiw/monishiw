@@ -10,7 +10,7 @@ import json
 import os
 from typing import Any
 
-MODEL = os.environ.get("LICENSE_AI_MODEL", "gpt-4.1")
+MODEL = os.environ.get("LICENSE_AI_MODEL", "gpt-5")
 
 
 def ai_enabled() -> bool:

@@ -85,7 +85,7 @@ uvicorn app.main:app --reload --port 8000
 | `LICENSE_DATA_DIR` | `data/` | DB と画像の保存先 |
 | `LICENSE_DB_PATH` / `LICENSE_IMAGE_DIR` | 上記配下 | 個別指定 |
 | `OPENAI_API_KEY` | なし | 設定すると GPT による生成AI分析が有効になる |
-| `LICENSE_AI_MODEL` | `gpt-4.1` | 使用モデル（JSON Schema 構造化出力に対応したもの） |
+| `LICENSE_AI_MODEL` | `gpt-5` | 使用モデル（JSON Schema 構造化出力に対応したもの） |
 
 ## データモデル（`licenses` テーブル）
 
@@ -107,7 +107,7 @@ CSV 取込の列は `data/import_template.csv` を参照してください。
 
 ## 生成AI 分析（`app/ai.py`）
 
-OpenAI SDK で GPT（既定 `gpt-4.1`、Chat Completions の JSON Schema 構造化出力）を呼び、以下を JSON で受け取って画面に描画します。あわせて、シナリオ別の保有者数・75歳以上比率・年齢構成の変化をグラフ表示します。
+OpenAI SDK で GPT（既定 `gpt-5`、Chat Completions の JSON Schema 構造化出力）を呼び、以下を JSON で受け取って画面に描画します。あわせて、シナリオ別の保有者数・75歳以上比率・年齢構成の変化をグラフ表示します。
 
 - headline / summary / key_figures（現在と将来の主要指標）
 - scenarios（名称・確からしさ・前提・保有者の見通し・事業への影響）
