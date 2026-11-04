@@ -13,6 +13,24 @@
 
 共通フィルタ（地方・都道府県・年齢範囲・免許種類・色・性別）は全画面に効きます。ライト／ダークテーマ対応。
 
+## ブラウザ版（サーバー不要）
+
+`web/index.html` を開くだけで動作する版も同梱しています。Python もサーバーも不要で、GitHub Pages や Vercel などの静的ホスティングにそのまま置けます。
+
+- 初回起動時に件数（10万／30万／100万件）を選ぶと、合成データをブラウザ内で生成します（100万件で約3秒）。
+- 集計・地図・将来推計・免許証画像の生成・CSV 入出力はすべてブラウザ内（JavaScript + TypedArray）で動作し、編集・追加・削除・アップロード画像は IndexedDB に保存されて再読み込み後も残ります。
+- 生成AI 分析は右上の「AI設定」に Anthropic API キーを入れると有効になります（ブラウザから api.anthropic.com を直接呼び出し。キーは端末の localStorage のみに保存）。未設定時はルールベースの簡易分析で応答します。
+- 外部 CDN には依存しません（地図ライブラリ・境界データを同梱）。地図の背景タイルだけはインターネット接続時に表示されます。
+
+```bash
+# ローカルで試す場合（file:// で開いても動作します）
+cd license-analytics/web && python -m http.server 8080   # → http://localhost:8080/
+```
+
+GitHub Pages で公開する場合は Settings › Pages でこのブランチを選び、`https://<ユーザー名>.github.io/<リポジトリ名>/license-analytics/web/` を開きます。
+
+機能はサーバー版と同じです。サーバー版は複数人での共有・実データ接続・大規模運用向け、ブラウザ版はデモ・個人利用向けです。
+
 ## 構成
 
 ```
@@ -26,6 +44,7 @@ license-analytics/
 │   ├── prefectures.py   都道府県マスタ＋外部データ（IPSS 地域別将来推計人口の概数）
 │   └── constants.py     免許種類・色・年齢階級の定義
 ├── static/              index.html / app.js（Leaflet + Chart.js）, japan.topojson, vendor/
+├── web/                 ブラウザ版（engine.js がデータ生成・集計・推計・AI 呼び出しを担当。サーバー不要）
 ├── scripts/generate_data.py   合成データ生成（100万件）
 ├── data/                DuckDB ファイル・画像（git 管理外）、CSV テンプレート
 └── tests/test_app.py    API 結合テスト

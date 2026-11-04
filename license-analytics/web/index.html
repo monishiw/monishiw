@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>運転免許証データ分析（ブラウザ版）</title>
+<link rel="stylesheet" href="vendor/leaflet.min.css">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f5f7; --surface: #ffffff; --surface-2: #f9fafb; --line: #e3e6ea;
+  --text: #15181d; --text-2: #4b5260; --muted: #7b8494;
+  --accent: #2a78d6; --accent-soft: #e3eefb; --accent-fg: #ffffff;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+  --good: #1b8a4a; --warn: #c27a00; --bad: #c43a3a;
+  --gold: #c9971c; --blue: #2a78d6; --green: #1baf7a;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.05);
+  --font: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121418; --surface: #1b1e24; --surface-2: #22262e; --line: #2f343d;
+    --text: #eceef2; --text-2: #c0c5cf; --muted: #8c93a1;
+    --accent: #3987e5; --accent-soft: #1d2d44; --accent-fg: #ffffff;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --good: #3fae73; --warn: #e0a033; --bad: #ef7b72; --gold: #d9ad3a;
+    --shadow: 0 1px 2px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121418; --surface: #1b1e24; --surface-2: #22262e; --line: #2f343d;
+  --text: #eceef2; --text-2: #c0c5cf; --muted: #8c93a1;
+  --accent: #3987e5; --accent-soft: #1d2d44; --accent-fg: #ffffff;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  --good: #3fae73; --warn: #e0a033; --bad: #ef7b72; --gold: #d9ad3a;
+  --shadow: 0 1px 2px rgba(0,0,0,.3);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.5; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); }
+header { position: sticky; top: 0; z-index: 50; background: var(--surface); border-bottom: 1px solid var(--line); }
+.topbar { display: flex; align-items: center; gap: 16px; padding: 10px 16px; flex-wrap: wrap; }
+.brand { font-weight: 700; font-size: 16px; letter-spacing: .01em; display: flex; align-items: center; gap: 8px; }
+.brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+nav.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+nav.tabs button { border: 0; background: transparent; padding: 8px 14px; border-radius: 8px; color: var(--text-2); cursor: pointer; font-weight: 600; }
+nav.tabs button.active { background: var(--accent-soft); color: var(--accent); }
+.spacer { flex: 1; }
+.pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2); }
+.pill.on { background: #e3f6ec; color: var(--good); border-color: transparent; }
+.filterbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; padding: 8px 16px 12px; border-top: 1px solid var(--line); background: var(--surface-2); }
+.field { display: flex; flex-direction: column; gap: 3px; min-width: 110px; }
+.field label { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
+.field select, .field input[type=number], .field input[type=text], .field input[type=date], textarea {
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-height: 34px; }
+.field select[multiple] { min-height: 34px; height: 34px; }
+.btn { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-weight: 600; color: var(--text-2); }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.btn.danger { color: var(--bad); }
+.btn.sm { padding: 4px 10px; font-size: 12px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.chip { background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 2px 10px; font-size: 12px; cursor: pointer; }
+main { padding: 16px; max-width: 1600px; margin: 0 auto; }
+section.view { display: none; }
+section.view.active { display: block; }
+.grid { display: grid; gap: 14px; }
+.kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); }
+.kpi .l { font-size: 12px; color: var(--muted); font-weight: 600; }
+.kpi .v { font-size: 24px; font-weight: 700; letter-spacing: -.01em; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.kpi .s { font-size: 12px; color: var(--text-2); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 14px 16px; min-width: 0; }
+.card h3 { margin: 0 0 8px; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.card h3 .sub { font-weight: 500; color: var(--muted); font-size: 12px; }
+.card h3 .right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.two { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+.three { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+@media (max-width: 1000px) { .two { grid-template-columns: 1fr; } }
+#map { height: 560px; border-radius: 10px; background: var(--surface-2); }
+.legend { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); margin-top: 8px; flex-wrap: wrap; }
+.legend .ramp { display: flex; }
+.legend .ramp span { width: 26px; height: 10px; display: inline-block; }
+.chart-box { position: relative; height: 240px; }
+.chart-box.tall { height: 320px; }
+table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.data th, table.data td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+table.data th { font-size: 12px; color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--surface); }
+table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.data tbody tr:hover { background: var(--surface-2); cursor: pointer; }
+.table-wrap { overflow: auto; max-height: 560px; border: 1px solid var(--line); border-radius: 10px; }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 10px; font-size: 13px; color: var(--text-2); }
+.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.slider { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+.slider label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-2); font-weight: 600; }
+.slider input[type=range] { width: 100%; }
+.slider .hint { font-size: 11px; color: var(--muted); }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+.badge.gold { background: #fbf1d4; color: #8a6410; } .badge.blue { background: #e3eefb; color: #1d5db0; } .badge.green { background: #dff5ea; color: #16744a; }
+.badge.ok { background: #dff5ea; color: #16744a; } .badge.warn { background: #fff1d6; color: #8a5a00; } .badge.bad { background: #fde3e3; color: #a12b2b; }
+:root[data-theme="dark"] .badge, .dark .badge { filter: brightness(.9); }
+.ai-q { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; }
+textarea { width: 100%; min-height: 84px; resize: vertical; }
+.presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.ai-result .headline { font-size: 18px; font-weight: 700; margin: 0 0 6px; }
+.ai-result p { margin: 0 0 8px; color: var(--text-2); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.scn { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--surface-2); }
+.scn h4 { margin: 0 0 6px; font-size: 14px; display: flex; justify-content: space-between; }
+.scn .k { font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 6px; }
+.loading { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+.modal-bg.open { display: flex; }
+.modal { background: var(--surface); border-radius: 14px; width: min(980px, 100%); max-height: 92vh; overflow: auto; padding: 18px 20px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.modal h3 { margin: 0 0 12px; display: flex; align-items: center; gap: 10px; }
+.modal .close { margin-left: auto; }
+.rec { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 800px) { .rec { grid-template-columns: 1fr; } }
+.rec img { width: 100%; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); }
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.form .field.wide { grid-column: 1 / -1; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; z-index: 200; pointer-events: none; }
+.toast.show { opacity: 1; }
+.note { font-size: 12px; color: var(--muted); }
+.leaflet-container { font-family: var(--font); }
+.leaflet-tooltip.pref-tip { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); font-size: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 5px 10px; font-size: 12px; cursor: pointer; color: var(--text-2); }
+.seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.heat { display: grid; gap: 2px; font-size: 11px; }
+.heat .cell { border-radius: 3px; padding: 4px 2px; text-align: center; color: var(--text); }
+.heat .h { color: var(--muted); font-weight: 600; text-align: center; padding: 2px; }
+.heat .rh { color: var(--muted); font-weight: 600; padding: 4px 6px; white-space: nowrap; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; }
+.setup { position: fixed; inset: 0; background: var(--bg); z-index: 300; display: none; align-items: center; justify-content: center; padding: 16px; }
+.setup.open { display: flex; }
+.setup .box { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px 28px; max-width: 560px; width: 100%; box-shadow: var(--shadow); }
+.setup h2 { margin: 0 0 6px; font-size: 20px; }
+.setup .opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }
+.setup .opts button { padding: 12px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-weight: 700; }
+.setup .opts button:hover { border-color: var(--accent); color: var(--accent); }
+.bar { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin-top: 12px; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+</style>
+</head>
+<body>
+<header>
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span>運転免許証データ分析</div>
+    <nav class="tabs">
+      <button data-view="dash" class="active">分析ダッシュボード</button>
+      <button data-view="proj">将来推計</button>
+      <button data-view="ai">AI シナリオ分析</button>
+      <button data-view="admin">データ管理</button>
+    </nav>
+    <div class="spacer"></div>
+    <span class="pill" id="pill-count">—</span>
+    <span class="pill" id="pill-ai">AI: 確認中</span>
+    <button class="btn sm" id="ai-settings">AI設定</button>
+    <button class="btn sm" id="data-settings">データ</button>
+    <button class="btn sm" id="theme-toggle" title="テーマ切替">◐</button>
+  </div>
+  <div class="filterbar" id="filterbar">
+    <div class="field"><label>地方</label><select id="f-region"><option value="">全国</option></select></div>
+    <div class="field" style="min-width:180px"><label>都道府県（地図クリックでも選択）</label><select id="f-pref" multiple size="1"></select></div>
+    <div class="field" style="min-width:80px"><label>年齢 From</label><input type="number" id="f-agemin" min="16" max="110" placeholder="16"></div>
+    <div class="field" style="min-width:80px"><label>年齢 To</label><input type="number" id="f-agemax" min="16" max="110" placeholder="110"></div>
+    <div class="field"><label>免許種類</label><select id="f-type"><option value="">すべて</option></select></div>
+    <div class="field"><label>免許証の色</label><select id="f-color"><option value="">すべて</option></select></div>
+    <div class="field"><label>性別</label><select id="f-sex"><option value="">すべて</option><option>男性</option><option>女性</option></select></div>
+    <button class="btn primary" id="f-apply">適用</button>
+    <button class="btn" id="f-clear">クリア</button>
+    <div class="chips" id="f-chips"></div>
+  </div>
+</header>
+
+<main>
+  <!-- ===================== 分析ダッシュボード ===================== -->
+  <section class="view active" id="view-dash">
+    <div class="grid kpis" id="kpis"></div>
+    <div class="grid two" style="margin-top:14px">
+      <div class="card">
+        <h3>地域マップ
+          <span class="sub">都道府県をクリックで絞り込み</span>
+          <span class="right">
+            <select id="map-metric" style="padding:4px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface)">
+              <option value="count">保有者数（サンプル件数）</option>
+              <option value="avg_age">平均年齢</option>
+              <option value="aged70_share">70歳以上比率 %</option>
+              <option value="aged75_share">75歳以上比率 %</option>
+              <option value="gold_share">ゴールド免許比率 %</option>
+              <option value="holding_rate">推定保有率 %（対人口）</option>
+              <option value="pop_change_2035">人口推計 2020→2035 変化 %</option>
+              <option value="proj_change">10年後の保有者変化 %（推計）</option>
+              <option value="proj_aged75">10年後の75歳以上比率 %（推計）</option>
+            </select>
+          </span>
+        </h3>
+        <div id="map"></div>
+        <div class="legend" id="map-legend"></div>
+      </div>
+      <div class="grid" style="align-content:start">
+        <div class="card"><h3>年齢構成 <span class="sub">現在</span></h3><div class="chart-box"><canvas id="c-age"></canvas></div></div>
+        <div class="card"><h3>免許種類（最上位）</h3><div class="chart-box"><canvas id="c-type"></canvas></div></div>
+        <div class="card"><h3>免許証の色 × 年齢構成</h3><div class="chart-box"><canvas id="c-color"></canvas></div></div>
+      </div>
+    </div>
+    <div class="grid three" style="margin-top:14px">
+      <div class="card"><h3>年齢階級 × 免許種類 <span class="sub">件数ヒートマップ</span></h3><div id="heat" class="heat"></div></div>
+      <div class="card"><h3>有効期限の到来年 <span class="sub">更新需要の見込み</span></h3><div class="chart-box"><canvas id="c-expiry"></canvas></div></div>
+      <div class="card"><h3>初回取得年の分布 <span class="sub">コホートの厚み</span></h3><div class="chart-box"><canvas id="c-first"></canvas></div></div>
+    </div>
+  </section>
+
+  <!-- ===================== 将来推計 ===================== -->
+  <section class="view" id="view-proj">
+    <div class="card">
+      <h3>推計条件 <span class="sub">コホート要因法：加齢 × 継続率（生存・返納）× 地域人口推計 × 新規取得</span>
+        <span class="right">
+          <select id="p-scenario" style="padding:4px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface)"></select>
+          <span class="seg" id="p-group"><button data-g="age_band" class="on">年齢階級</button><button data-g="license_type">免許種類</button><button data-g="color">色</button><button data-g="total">合計</button></span>
+        </span>
+      </h3>
+      <div class="note" id="p-notes"></div>
+      <div class="sliders" style="margin-top:10px">
+        <div class="slider"><label>推計年数 <span id="v-horizon">10年</span></label><input type="range" id="s-horizon" min="3" max="25" step="1" value="10"><div class="hint">2025年を基準年とする</div></div>
+        <div class="slider"><label>高齢者の返納率 倍率 <span id="v-ret">1.0×</span></label><input type="range" id="s-ret" min="0.5" max="2.5" step="0.1" value="1"><div class="hint">70歳以上の自主返納・失効の発生率</div></div>
+        <div class="slider"><label>若年層の取得率 倍率 <span id="v-acq">1.0×</span></label><input type="range" id="s-acq" min="0.5" max="1.3" step="0.05" value="1"><div class="hint">18〜21歳の新規取得者数</div></div>
+        <div class="slider"><label>人口推計の上下振れ <span id="v-pop">0%</span></label><input type="range" id="s-pop" min="-0.15" max="0.15" step="0.01" value="0"><div class="hint">IPSS 推計に対する 10 年後の乖離</div></div>
+        <div class="slider"><label>都市圏への追加流出 /年 <span id="v-mig">0.0%</span></label><input type="range" id="s-mig" min="0" max="0.01" step="0.001" value="0"><div class="hint">地方 → 三大都市圏の純移動</div></div>
+      </div>
+    </div>
+    <div class="grid two" style="margin-top:14px">
+      <div class="card"><h3>保有者数の推移 <span class="sub" id="p-title"></span></h3><div class="chart-box tall"><canvas id="c-proj"></canvas></div></div>
+      <div class="card"><h3>年齢構成の変化 <span class="sub">基準年 vs 最終年</span></h3><div class="chart-box tall"><canvas id="c-proj-age"></canvas></div></div>
+    </div>
+    <div class="grid two" style="margin-top:14px">
+      <div class="card"><h3>シナリオ比較 <span class="sub">総保有者数（拡大推計）</span></h3><div class="chart-box tall"><canvas id="c-cmp"></canvas></div></div>
+      <div class="card"><h3>シナリオ比較 <span class="sub">75歳以上比率 %</span></h3><div class="chart-box tall"><canvas id="c-cmp75"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>推計テーブル</h3><div class="table-wrap" style="max-height:360px"><table class="data" id="t-proj"></table></div></div>
+  </section>
+
+  <!-- ===================== AI シナリオ分析 ===================== -->
+  <section class="view" id="view-ai">
+    <div class="card">
+      <h3>地域の将来像を質問する <span class="sub" id="ai-engine"></span></h3>
+      <div class="ai-q">
+        <div>
+          <textarea id="ai-question">この地域では10年後、免許保有者の年齢構成がどう変化するか。その変化が自動車関連事業にどのような影響を与えるか？</textarea>
+          <div class="presets" id="ai-presets"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;min-width:200px">
+          <div class="field"><label>対象地域（フィルタと連動）</label><input type="text" id="ai-area" readonly></div>
+          <div class="field"><label>推計年数</label><input type="number" id="ai-horizon" value="10" min="3" max="25"></div>
+          <button class="btn primary" id="ai-run">分析する</button>
+        </div>
+      </div>
+      <div class="note" style="margin-top:8px">免許証データの集計 ＋ コホート推計（5 シナリオ）＋ 地域別将来推計人口（IPSS）を生成AIに渡し、シナリオと事業機会を提示します。</div>
+    </div>
+    <div id="ai-out" style="margin-top:14px"></div>
+  </section>
+
+  <!-- ===================== データ管理 ===================== -->
+  <section class="view" id="view-admin">
+    <div class="grid kpis" id="q-kpis"></div>
+    <div class="card" style="margin-top:14px">
+      <h3>レコード一覧 <span class="sub" id="a-count"></span>
+        <span class="right">
+          <input type="text" id="a-q" placeholder="番号・氏名・カナ・住所で検索" style="padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:240px">
+          <select id="a-status" style="padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface)"><option value="">全状態</option><option>有効</option><option>失効</option><option>返納</option></select>
+          <button class="btn sm" id="a-search">検索</button>
+          <button class="btn sm primary" id="a-new">＋ 新規登録</button>
+          <label class="btn sm">CSV取込<input type="file" id="a-import" accept=".csv" hidden></label>
+          <button class="btn sm" id="a-export">CSV出力</button>
+        </span>
+      </h3>
+      <div class="table-wrap"><table class="data" id="t-rec"></table></div>
+      <div class="pager"><span id="a-page"></span><button class="btn sm" id="a-prev">前へ</button><button class="btn sm" id="a-next">次へ</button></div>
+    </div>
+  </section>
+</main>
+
+<div class="setup" id="setup"><div class="box">
+  <h2>運転免許証データ分析（ブラウザ版）</h2>
+  <p class="note">サーバー不要でブラウザだけで動作します。合成データをこの端末内（IndexedDB）に生成し、集計・将来推計・画像生成はすべてブラウザ内で行います。生成AI 分析は右上の「AI設定」で Anthropic API キーを設定すると有効になります。</p>
+  <div><b>生成する件数を選んでください</b><span class="note">（100万件は生成に 10〜30 秒、メモリ約 100MB）</span></div>
+  <div class="opts"><button data-n="100000">10万件<br><span class="note">軽快</span></button><button data-n="300000">30万件<br><span class="note">標準</span></button><button data-n="1000000">100万件<br><span class="note">本番相当</span></button></div>
+  <div class="note" id="setup-msg"></div><div class="bar"><i id="setup-bar"></i></div>
+</div></div>
+<div class="modal-bg" id="modal"><div class="modal" id="modal-body"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="vendor/leaflet.min.js"></script>
+<script src="vendor/topojson.min.js"></script>
+<script src="vendor/chart.umd.min.js"></script>
+<script src="japan.topo.js"></script>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
