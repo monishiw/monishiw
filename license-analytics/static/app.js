@@ -49,7 +49,7 @@
       age_min: $('#f-agemin').value || null, age_max: $('#f-agemax').value || null,
       license_type: $('#f-type').value ? [$('#f-type').value] : [],
       color: $('#f-color').value ? [$('#f-color').value] : [],
-      sex: $('#f-sex').value || null,
+      sex: null,
     };
     renderChips();
   }
@@ -60,7 +60,6 @@
     if (f.age_min || f.age_max) chips.push([`年齢 ${f.age_min || 16}〜${f.age_max || ''}`, () => { $('#f-agemin').value = ''; $('#f-agemax').value = ''; }]);
     if (f.license_type?.length) chips.push(['種類: ' + f.license_type[0], () => { $('#f-type').value = ''; }]);
     if (f.color?.length) chips.push(['色: ' + f.color[0], () => { $('#f-color').value = ''; }]);
-    if (f.sex) chips.push([f.sex, () => { $('#f-sex').value = ''; }]);
     $('#f-chips').innerHTML = chips.length ? '' : '<span class="note">絞り込みなし（全国）</span>';
     chips.forEach(([label, undo]) => { const el = document.createElement('span'); el.className = 'chip'; el.textContent = label + ' ×'; el.onclick = () => { undo(); apply(); }; $('#f-chips').appendChild(el); });
     $('#ai-area').value = areaLabel();
@@ -70,7 +69,9 @@
     if (f.prefecture?.length) return f.prefecture.map((c) => META.prefectures.find((p) => p.code === c).name).join('・');
     return f.region || '全国';
   }
-  function apply() { readFilters(); refreshView(true); }
+  let applyTimer;
+  function apply() { clearTimeout(applyTimer); readFilters(); refreshView(true); }
+  function applySoon() { clearTimeout(applyTimer); applyTimer = setTimeout(apply, 350); }
 
   // ---------------------------------------------------------------- dashboard
   async function loadDash() {
@@ -375,7 +376,11 @@
     PRESET_Q.forEach((q) => { const c = document.createElement('span'); c.className = 'chip'; c.textContent = q.slice(0, 28) + '…'; c.title = q; c.onclick = () => { $('#ai-question').value = q; }; $('#ai-presets').appendChild(c); });
     $('#f-pref').size = 1; $('#f-pref').addEventListener('focus', () => { $('#f-pref').size = 8; $('#f-pref').style.position = 'absolute'; $('#f-pref').style.zIndex = 60; $('#f-pref').style.minWidth = '180px'; });
     $('#f-pref').addEventListener('blur', () => { $('#f-pref').size = 1; $('#f-pref').style.position = ''; });
-    $('#f-apply').onclick = apply; $('#f-clear').onclick = () => { $$('#filterbar select, #filterbar input').forEach((el) => { if (el.multiple) $$('option', el).forEach((o) => o.selected = false); else el.value = ''; }); apply(); };
+    // 条件は変更と同時に反映（数値入力は少し待ってから）
+    ['#f-region', '#f-type', '#f-color'].forEach((s) => $(s).onchange = apply);
+    $('#f-pref').onchange = apply;
+    ['#f-agemin', '#f-agemax'].forEach((s) => { $(s).oninput = applySoon; $(s).onchange = apply; });
+    $('#f-clear').onclick = () => { $$('#filterbar select, #filterbar input').forEach((el) => { if (el.multiple) $$('option', el).forEach((o) => o.selected = false); else el.value = ''; }); apply(); };
     $$('nav.tabs button').forEach((b) => b.onclick = () => showView(b.dataset.view));
     $('#map-metric').onchange = (e) => { state.mapMetric = e.target.value; paintMap(); };
     $('#p-scenario').onchange = () => { applyPreset(); loadProj(); };
