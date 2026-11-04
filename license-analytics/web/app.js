@@ -121,17 +121,33 @@
 
   // ---------------------------------------------------------------- map
   let map, geoLayer, geoFeatures;
+  let labelLayer;
   async function initMap() {
-    map = L.map('map', { zoomSnap: .25, attributionControl: true }).setView([37.5, 137.2], 5);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO', opacity: .55 }).addTo(map);
+    // 外部タイルや API キーに依存しない内蔵地図: 海の背景 + 都道府県ポリゴン + 名称ラベル。
+    // オンライン時のみ背景タイルを薄く重ね、取得できなければ自動で外す。
+    map = L.map('map', { zoomSnap: .25, attributionControl: true, minZoom: 4, maxZoom: 9 }).setView([37.5, 137.2], 5);
+    map.attributionControl.setPrefix('境界データ: dataofjapan/land');
+    if (navigator.onLine) {
+      const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO', opacity: .45 });
+      let failed = 0; tiles.on('tileerror', () => { if (++failed >= 3 && map.hasLayer(tiles)) map.removeLayer(tiles); }); tiles.addTo(map);
+    }
     const topo = window.JAPAN_TOPO;
     geoFeatures = topojson.feature(topo, topo.objects.japan);
-    geoLayer = L.geoJSON(geoFeatures, { style: () => ({ color: '#fff', weight: .8, fillColor: '#ccc', fillOpacity: .85 }),
+    geoLayer = L.geoJSON(geoFeatures, { style: () => ({ color: css('--map-border'), weight: 1, fillColor: '#ccc', fillOpacity: .9 }),
       onEachFeature: (f, l) => {
         l.on('click', () => { const code = f.properties.id; const opt = $(`#f-pref option[value="${code}"]`); opt.selected = !opt.selected; apply(); });
         l.bindTooltip(() => tooltipHtml(f.properties.id), { className: 'pref-tip', sticky: true });
         l.on('mouseover', () => l.setStyle({ weight: 2, color: css('--text') })); l.on('mouseout', () => geoLayer.resetStyle(l));
       } }).addTo(map);
+    // 都道府県名ラベル（ズーム 6 以上で表示、選択中は常に表示）
+    labelLayer = L.layerGroup().addTo(map);
+    geoLayer.eachLayer((l) => { const p = META.prefectures.find((x) => x.code === l.feature.properties.id); if (!p) return; const c = l.getBounds().getCenter();
+      const m = L.marker(c, { interactive: false, icon: L.divIcon({ className: 'pref-label', html: `<span>${p.name.replace(/[都道府県]$/, '')}</span>`, iconSize: null }) }); m.prefCode = p.code; labelLayer.addLayer(m); });
+    map.on('zoomend', updateLabels); updateLabels();
+  }
+  function updateLabels() {
+    if (!labelLayer) return; const z = map.getZoom(); const sel = new Set(state.filters.prefecture || []);
+    labelLayer.eachLayer((m) => { const el = m.getElement(); if (!el) return; el.style.display = z >= 6 || sel.has(m.prefCode) ? '' : 'none'; el.classList.toggle('sel', sel.has(m.prefCode)); });
   }
   function tooltipHtml(code) {
     const d = (state.mapData?.prefectures || []).find((p) => p.code === code); const pr = (state.projMap?.prefectures || []).find((p) => p.code === code);
@@ -160,7 +176,8 @@
     const min = Math.min(...vals), max = Math.max(...vals);
     const selected = new Set(state.filters.prefecture || []);
     const colorFor = (v) => { if (v == null) return '#ddd'; if (diverging) { const a = Math.max(Math.abs(min), Math.abs(max)) || 1; const t = (v / a + 1) / 2; return DIV[Math.min(6, Math.floor(t * 7))]; } const t = max > min ? (v - min) / (max - min) : .5; return RAMP[Math.min(6, Math.floor(t * 7))]; };
-    geoLayer.setStyle((f) => { const code = f.properties.id; const sel = selected.has(code); return { fillColor: colorFor(metricValue(code)), fillOpacity: selected.size && !sel ? .35 : .9, color: sel ? css('--text') : '#fff', weight: sel ? 2.2 : .8 }; });
+    geoLayer.setStyle((f) => { const code = f.properties.id; const sel = selected.has(code); return { fillColor: colorFor(metricValue(code)), fillOpacity: selected.size && !sel ? .4 : .92, color: sel ? css('--text') : css('--map-border'), weight: sel ? 2.2 : 1 }; });
+    updateLabels();
     const label = $('#map-metric option:checked').textContent;
     const ramp = diverging ? DIV : RAMP; const lo = diverging ? -Math.max(Math.abs(min), Math.abs(max)) : min; const hi = diverging ? -lo : max;
     $('#map-legend').innerHTML = `<span>${label}</span><span>${isFinite(lo) ? lo.toFixed(1) : ''}</span><span class="ramp">${ramp.map((c) => `<span style="background:${c}"></span>`).join('')}</span><span>${isFinite(hi) ? hi.toFixed(1) : ''}</span>` + (selected.size ? `<span class="note">選択中: ${areaLabel()}</span>` : '');
