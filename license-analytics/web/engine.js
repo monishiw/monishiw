@@ -53,6 +53,7 @@ window.Engine = (() => {
   const ageFromBirth = (bday) => { const b = new Date(bday * DAY); let a = today.getUTCFullYear() - b.getUTCFullYear(); if (today.getUTCMonth() < b.getUTCMonth() || (today.getUTCMonth() === b.getUTCMonth() && today.getUTCDate() < b.getUTCDate())) a--; return a; };
 
   // ------------------------------------------------------------------ データ（列指向の TypedArray）
+  const DATA_VERSION = 2; // 件数の選択肢を変えたときに上げる（古い保存データは破棄して選び直してもらう）
   const D = { n: 0, seed: 42, f: null, over: new Map(), extra: [], deleted: new Set() };
   const AGE_W = []; { const push = (k, v) => { for (let i = 0; i < k; i++) AGE_W.push(v); }; [0.05, 0.23, 0.42, 0.6].forEach((v) => AGE_W.push(v)); push(10, 1); push(10, 1.05); push(10, 1.35); push(10, 1.3); push(10, 1.15); push(5, 1); push(5, 0.7); push(5, 0.35); for (let i = 0; i < 16; i++) AGE_W.push(0.15 - (0.14 * i) / 15); }
   function cdf(w) { const s = w.reduce((a, b) => a + b, 0); const c = []; let acc = 0; for (const x of w) { acc += x / s; c.push(acc); } return c; }
@@ -143,10 +144,11 @@ window.Engine = (() => {
   function openDb() { return new Promise((res, rej) => { const q = indexedDB.open("license-analytics", 1); q.onupgradeneeded = () => { const db = q.result; db.createObjectStore("kv"); db.createObjectStore("images"); }; q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
   async function kv(store, mode, fn) { if (!idb) idb = await openDb(); return new Promise((res, rej) => { const tx = idb.transaction(store, mode); const r = fn(tx.objectStore(store)); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error); }); }
   const kvGet = (k) => kv("kv", "readonly", (s) => s.get(k)); const kvSet = (k, v) => kv("kv", "readwrite", (s) => s.put(v, k));
-  async function persistMeta() { try { await kvSet("meta", { n: D.n, seed: D.seed }); await kvSet("over", [...D.over.entries()]); await kvSet("extra", D.extra); await kvSet("deleted", [...D.deleted]); } catch (e) { console.warn("persist failed", e); } }
+  async function persistMeta() { try { await kvSet("meta", { n: D.n, seed: D.seed, version: DATA_VERSION }); await kvSet("over", [...D.over.entries()]); await kvSet("extra", D.extra); await kvSet("deleted", [...D.deleted]); } catch (e) { console.warn("persist failed", e); } }
   async function load(onProgress) {
     let meta = null; try { meta = await kvGet("meta"); } catch {}
     if (!meta) return false;
+    if (meta.version !== DATA_VERSION) { await reset(); return false; }
     await generate(meta.n, meta.seed, onProgress);
     try { D.over = new Map(await kvGet("over") || []); D.extra = (await kvGet("extra")) || []; D.deleted = new Set((await kvGet("deleted")) || []); } catch {}
     for (const [id] of D.over) { const r = getRecord(id); if (r) applyToColumns(id, r); }
