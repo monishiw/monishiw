@@ -11,7 +11,7 @@ _tmp = tempfile.mkdtemp()
 os.environ["LICENSE_DATA_DIR"] = _tmp
 os.environ["LICENSE_DB_PATH"] = os.path.join(_tmp, "t.duckdb")
 os.environ["LICENSE_IMAGE_DIR"] = os.path.join(_tmp, "images")
-os.environ.pop("ANTHROPIC_API_KEY", None)
+os.environ.pop("OPENAI_API_KEY", None)
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -78,6 +78,7 @@ def test_ai_fallback(client):
     r = client.post("/api/ai/analyze", json={"question": "10年後は？", "prefecture": [5], "horizon": 10}).json()
     assert r["engine"] == "rule-based"
     assert r["scenarios"] and r["business_opportunities"] and "秋田県" in r["headline"]
+    assert len(r["charts"]["scenarios"]) == 5 and len(r["charts"]["years"]) == 11
     r2 = client.post("/api/ai/analyze", json={"question": "10年後は？", "region": "東北", "horizon": 5}).json()
     assert r2["context_preview"]["area"] == "東北"
 

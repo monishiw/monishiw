@@ -128,10 +128,9 @@
     // オンライン時のみ背景タイルを薄く重ね、取得できなければ自動で外す。
     map = L.map('map', { zoomSnap: .25, attributionControl: true, minZoom: 4, maxZoom: 9 }).setView([37.5, 137.2], 5);
     map.attributionControl.setPrefix('境界データ: dataofjapan/land');
-    if (navigator.onLine) {
-      const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO', opacity: .45 });
-      let failed = 0; tiles.on('tileerror', () => { if (++failed >= 3 && map.hasLayer(tiles)) map.removeLayer(tiles); }); tiles.addTo(map);
-    }
+    // 背景タイル: 国土地理院 淡色地図（API キー不要）。取得できない環境では自動で外し、内蔵描画のみで表示する。
+    const tiles = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a>', opacity: .6, minNativeZoom: 5, maxNativeZoom: 18 });
+    let failed = 0; tiles.on('tileerror', () => { if (++failed >= 4 && map.hasLayer(tiles)) map.removeLayer(tiles); }); tiles.addTo(map);
     const topo = await (await fetch('/static/japan.topojson')).json();
     geoFeatures = topojson.feature(topo, topo.objects.japan);
     geoLayer = L.geoJSON(geoFeatures, { style: () => ({ color: css('--map-border'), weight: 1, fillColor: '#ccc', fillOpacity: .9 }),
@@ -254,11 +253,16 @@
     const prio = { '高': 'bad', '中': 'warn', '低': 'ok' };
     $('#ai-out').innerHTML = `
       <div class="card ai-result">
-        <div class="chips" style="margin-bottom:8px"><span class="pill ${r.engine === 'rule-based' ? '' : 'on'}">${r.engine === 'rule-based' ? '簡易分析（ルールベース）' : 'Claude: ' + esc(r.engine)}</span>
+        <div class="chips" style="margin-bottom:8px"><span class="pill ${r.engine === 'rule-based' ? '' : 'on'}">${r.engine === 'rule-based' ? '簡易分析（ルールベース）' : 'GPT: ' + esc(r.engine)}</span>
           <span class="pill">${esc(r.context_preview.area)} / ${r.context_preview.horizon}年先 / サンプル ${fmt(r.context_preview.current_total)} 件 × ${r.context_preview.scale_factor}</span>${r.notice ? `<span class="note">${esc(r.notice)}</span>` : ''}</div>
         <h2 class="headline">${esc(r.headline)}</h2><p>${esc(r.summary)}</p>
         <table class="data"><thead><tr><th>指標</th><th class="num">現在</th><th class="num">将来</th><th>コメント</th></tr></thead><tbody>
           ${(r.key_figures || []).map((k) => `<tr><td>${esc(k.label)}</td><td class="num">${esc(k.now)}</td><td class="num">${esc(k.future)}</td><td style="white-space:normal">${esc(k.comment)}</td></tr>`).join('')}</tbody></table>
+      </div>
+      <div class="grid three" style="margin-top:14px">
+        <div class="card"><h3>保有者数の見通し <span class="sub">シナリオ別（拡大推計）</span></h3><div class="chart-box"><canvas id="ai-c-total"></canvas></div></div>
+        <div class="card"><h3>75歳以上比率 <span class="sub">シナリオ別 %</span></h3><div class="chart-box"><canvas id="ai-c-75"></canvas></div></div>
+        <div class="card"><h3>年齢構成の変化 <span class="sub">基準シナリオ</span></h3><div class="chart-box"><canvas id="ai-c-age"></canvas></div></div>
       </div>
       <div class="card" style="margin-top:14px"><h3>シナリオ</h3><div class="cards">
         ${(r.scenarios || []).map((s) => `<div class="scn"><h4>${esc(s.name)}<span class="badge blue">${esc(s.probability)}</span></h4><div class="k">前提</div>${esc(s.assumptions)}<div class="k">免許保有者の見通し</div>${esc(s.license_holder_outlook)}<div class="k">事業への影響</div>${esc(s.impact_on_business)}</div>`).join('')}</div></div>
@@ -269,6 +273,14 @@
         <div class="card"><h3>推奨アクション</h3><ol style="margin:0;padding-left:20px">${(r.recommended_actions || []).map((a) => `<li>${esc(a)}</li>`).join('')}</ol>
           <h3 style="margin-top:12px">データに関する注意</h3><ul class="note" style="margin:0;padding-left:18px">${(r.data_notes || []).map((a) => `<li>${esc(a)}</li>`).join('')}</ul></div>
       </div>`;
+    renderAICharts(r.charts);
+  }
+  function renderAICharts(c) {
+    if (!c) return; const S = SERIES();
+    chart('ai-c-total', { type: 'line', data: { labels: c.years, datasets: c.scenarios.map((s, i) => ({ label: s.name, data: s.total, borderColor: S[i], backgroundColor: S[i], pointRadius: 0, borderWidth: 2, tension: .25 })) }, options: baseOpts() });
+    chart('ai-c-75', { type: 'line', data: { labels: c.years, datasets: c.scenarios.map((s, i) => ({ label: s.name, data: s.aged75_share, borderColor: S[i], backgroundColor: S[i], pointRadius: 0, borderWidth: 2, tension: .25 })) },
+      options: baseOpts({ scales: { x: { grid: { display: false } }, y: { grid: { color: css('--line') }, ticks: { callback: (v) => v + '%' } } } }) });
+    chart('ai-c-age', { type: 'bar', data: { labels: META.age_bands, datasets: [{ label: `${c.years[0]}年`, data: META.age_bands.map((b) => c.age_now[b] || 0), backgroundColor: hexA(S[0], .45), borderRadius: 3 }, { label: `${c.years[c.years.length - 1]}年（推計）`, data: META.age_bands.map((b) => c.age_future[b] || 0), backgroundColor: S[0], borderRadius: 3 }] }, options: baseOpts() });
   }
 
   // ---------------------------------------------------------------- admin

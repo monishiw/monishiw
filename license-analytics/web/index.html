@@ -294,7 +294,7 @@ textarea { width: 100%; min-height: 84px; resize: vertical; }
 
 <div class="setup" id="setup"><div class="box">
   <h2>運転免許証データ分析（ブラウザ版）</h2>
-  <p class="note">サーバー不要でブラウザだけで動作します。合成データをこの端末内（IndexedDB）に生成し、集計・将来推計・画像生成はすべてブラウザ内で行います。地図・グラフ・推計は API キーなしで動作します。生成AI 分析だけは右上の「AI設定」で Anthropic API キーを設定すると有効になります。</p>
+  <p class="note">サーバー不要でブラウザだけで動作します。合成データをこの端末内（IndexedDB）に生成し、集計・将来推計・画像生成はすべてブラウザ内で行います。地図・グラフ・推計は API キーなしで動作します。生成AI 分析（OpenAI GPT）だけは右上の「AI設定」で API キーを設定すると有効になります。</p>
   <div><b>生成する件数を選んでください</b><span class="note">（100万件は生成に 10〜30 秒、メモリ約 100MB）</span></div>
   <div class="opts"><button data-n="100000">10万件<br><span class="note">軽快</span></button><button data-n="300000">30万件<br><span class="note">標準</span></button><button data-n="1000000">100万件<br><span class="note">本番相当</span></button></div>
   <div class="note" id="setup-msg"></div><div class="bar"><i id="setup-bar"></i></div>

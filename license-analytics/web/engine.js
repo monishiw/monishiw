@@ -296,7 +296,9 @@ window.Engine = (() => {
   async function importCsv(text) { const recs = parseCsv(text); let n = 0; const errors = []; for (let i = 0; i < recs.length; i++) { try { const r = recs[i]; const d = {}; for (const k of COLUMNS) if (r[k] !== undefined && r[k] !== "" && !["id", "age", "updated_at", "image_path"].includes(k)) d[k] = r[k]; ["prefecture_code", "first_issue_year", "violation_points"].forEach((k) => { if (d[k] != null) d[k] = parseInt(d[k], 10); }); if (d.ocr_confidence != null) d.ocr_confidence = parseFloat(d.ocr_confidence); for (const k of ["license_no", "name", "sex", "birth_date", "prefecture_code", "license_type", "color", "issue_date", "expiry_date"]) if (d[k] == null || Number.isNaN(d[k])) throw new Error(k + " が未入力"); await create(d); n++; } catch (e) { errors.push({ line: i + 2, error: e.message }); } } return { imported: n, errors: errors.slice(0, 50), error_count: errors.length }; }
 
   // ------------------------------------------------------------------ AI
-  const AI_MODEL = "claude-opus-5-5";
+  const DEFAULT_MODEL = "gpt-4.1";
+  function model() { try { return localStorage.getItem("openai_model") || DEFAULT_MODEL; } catch { return DEFAULT_MODEL; } }
+  function setModel(m) { try { if (m) localStorage.setItem("openai_model", m); else localStorage.removeItem("openai_model"); } catch {} }
   const SYSTEM_PROMPT = `あなたは自動車関連事業（販売・整備・保険・レンタカー・教習所・モビリティサービス）の戦略コンサルタント兼データアナリストです。運転免許証データベースの集計結果と、国立社会保障・人口問題研究所の地域別将来人口推計を組み合わせて、地域の将来像を分析します。
 原則:
 - 与えられた数表に基づいて定量的に述べる。数値を引用するときは年と単位を明示する。
@@ -311,8 +313,8 @@ window.Engine = (() => {
     risks: { type: "array", items: { type: "object", properties: { risk: { type: "string" }, mitigation: { type: "string" } }, required: ["risk", "mitigation"], additionalProperties: false } },
     recommended_actions: { type: "array", items: { type: "string" } }, data_notes: { type: "array", items: { type: "string" } } },
     required: ["headline", "summary", "key_figures", "scenarios", "business_opportunities", "risks", "recommended_actions", "data_notes"], additionalProperties: false };
-  function apiKey() { try { return localStorage.getItem("anthropic_api_key") || ""; } catch { return ""; } }
-  function setApiKey(k) { try { if (k) localStorage.setItem("anthropic_api_key", k); else localStorage.removeItem("anthropic_api_key"); } catch {} }
+  function apiKey() { try { return localStorage.getItem("openai_api_key") || ""; } catch { return ""; } }
+  function setApiKey(k) { try { if (k) localStorage.setItem("openai_api_key", k); else localStorage.removeItem("openai_api_key"); } catch {} }
   function buildContext(req) {
     const f = { prefecture: req.prefecture || [], region: req.region, age_min: req.age_min, age_max: req.age_max, license_type: req.license_type || [], color: req.color || [] };
     const area = f.prefecture.length ? f.prefecture.map((c) => PREF[c].name).join("・") : f.region || "全国";
@@ -321,13 +323,15 @@ window.Engine = (() => {
     let population; if (f.prefecture.length === 1) population = PREF[f.prefecture[0]]; else { const ps = f.prefecture.length ? f.prefecture.map((c) => PREF[c]) : PREFS.filter((p) => !f.region || p.region === f.region); const p20 = ps.reduce((s, p) => s + p.pop_2020, 0), p35 = ps.reduce((s, p) => s + p.pop_2035, 0); population = { area, pop_2020: p20, pop_2035: p35, total_change_ratio: +(p35 / p20).toFixed(4), aged65_2020: +(ps.reduce((s, p) => s + p.pop_2020 * p.aged65_2020, 0) / p20).toFixed(1), aged65_2035: +(ps.reduce((s, p) => s + p.pop_2035 * p.aged65_2035, 0) / p35).toFixed(1) }; }
     return { filters: { area, horizon_years: req.horizon, age_min: req.age_min, age_max: req.age_max, license_type: req.license_type, color: req.color }, current, projection, population };
   }
-  async function callClaude(question, ctx) {
+  async function callGPT(question, ctx) {
     const user = `## 質問\n${question}\n\n## 分析対象の条件\n${JSON.stringify(ctx.filters)}\n\n## 現状の集計（免許証データベース）\n${JSON.stringify(ctx.current)}\n\n## 将来推計（コホート要因法、シナリオ別）\n${JSON.stringify(ctx.projection)}\n\n## 外部データ: 地域別将来推計人口（IPSS 概数）\n${JSON.stringify(ctx.population)}\n\n上記を踏まえ、質問に答える形で、複数シナリオと事業機会を提示してください。`;
-    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey(), "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({ model: AI_MODEL, max_tokens: 12000, system: SYSTEM_PROMPT, thinking: { type: "adaptive" }, output_config: { effort: "high", format: { type: "json_schema", schema: OUTPUT_SCHEMA } }, messages: [{ role: "user", content: user }] }) });
+    const r = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { "content-type": "application/json", "authorization": "Bearer " + apiKey() },
+      body: JSON.stringify({ model: model(), messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: user }],
+        response_format: { type: "json_schema", json_schema: { name: "scenario_analysis", strict: true, schema: OUTPUT_SCHEMA } } }) });
     if (!r.ok) { let m = r.statusText; try { m = (await r.json()).error?.message || m; } catch {} throw new Error(`${r.status} ${m}`); }
-    const msg = await r.json(); if (msg.stop_reason === "refusal") throw new Error("refusal");
-    const text = msg.content.find((b) => b.type === "text")?.text; const data = JSON.parse(text); data.engine = AI_MODEL; data.usage = msg.usage; return data;
+    const msg = await r.json(); const choice = msg.choices?.[0]; if (!choice || choice.message?.refusal) throw new Error(choice?.message?.refusal || "empty response");
+    if (choice.finish_reason === "length") throw new Error("出力が長すぎて途中で切れました");
+    const data = JSON.parse(choice.message.content); data.engine = msg.model || model(); data.usage = msg.usage; return data;
   }
   function fallback(ctx) {
     const proj = ctx.projection, cur = ctx.current, pop = ctx.population, base = proj.base, years = base.years, first = years[0], last = years[years.length - 1], ch = base.change, area = base.prefecture;
@@ -346,12 +350,18 @@ window.Engine = (() => {
         { title: "ゴールド免許層向け優良ドライバー保険・ロイヤリティ", target: "ゴールド免許保有者", rationale: "高齢化によりゴールド比率は上昇し、低リスク層の囲い込みが収益性を左右する", market_size_hint: `約${f(last.colors["ゴールド"])}人`, timing: "即時", priority: "中" }],
       risks: [{ risk: "高齢層の返納が想定より早く進み、保有台数・整備需要が急減する", mitigation: "返納者向けサービスへの早期シフト、拠点の多機能化" }, { risk: "若年層の免許離れによる新規顧客の枯渇", mitigation: "カーシェア・サブスクで接点を維持し、ライフステージ変化時に販売へ接続" }, { risk: "人口推計の下振れ（災害・産業構造変化）", mitigation: "年次で免許データを更新し推計を再計算、拠点投資は段階的に" }],
       recommended_actions: ["70歳以上の保有者を市区町村単位で可視化し、返納見込みと接点（整備入庫履歴）を紐づける", "若年層比率が高いエリアにカーシェア拠点を先行配置する", "自治体のデマンド交通・返納支援制度と連携した送迎サービスを試行する", "推計を毎年更新し、シナリオごとの KPI（保有者数、75歳以上比率、ゴールド比率）をモニタリングする"],
-      data_notes: ["免許証データはサンプル抽出のため拡大係数で母集団規模に換算しています", "人口推計は国立社会保障・人口問題研究所の公表値を概数化したものです", "画面右上の「AI設定」で Anthropic API キーを設定すると生成AIによる詳細分析に切り替わります"] };
+      data_notes: ["免許証データはサンプル抽出のため拡大係数で母集団規模に換算しています", "人口推計は国立社会保障・人口問題研究所の公表値を概数化したものです", "画面右上の「AI設定」で OpenAI API キーを設定すると GPT による詳細分析に切り替わります"] };
+  }
+  function chartData(ctx) {
+    const years = ctx.projection.base.years.map((y) => y.year); const base = ctx.projection.base.years;
+    return { years, scenarios: Object.values(ctx.projection).map((p) => ({ name: p.scenario.name, total: p.years.map((y) => y.total), aged75_share: p.years.map((y) => y.aged75_share) })),
+      age_now: base[0].age_bands, age_future: base[base.length - 1].age_bands, colors_now: base[0].colors, colors_future: base[base.length - 1].colors };
   }
   async function analyze(req) {
     const ctx = buildContext(req); let result;
-    if (apiKey()) { try { result = await callClaude(req.question, ctx); } catch (e) { result = { engine: "rule-based", notice: `AI 呼び出しに失敗したため簡易分析を表示しています: ${e.message}`, ...fallback(ctx) }; } }
+    if (apiKey()) { try { result = await callGPT(req.question, ctx); } catch (e) { result = { engine: "rule-based", notice: `AI 呼び出しに失敗したため簡易分析を表示しています: ${e.message}`, ...fallback(ctx) }; } }
     else result = { engine: "rule-based", ...fallback(ctx) };
+    result.charts = chartData(ctx);
     result.context_preview = { area: ctx.filters.area, horizon: req.horizon, current_total: ctx.current.total, scale_factor: ctx.current.scale_factor }; return result;
   }
 
@@ -359,7 +369,7 @@ window.Engine = (() => {
   async function api(path, opts = {}) {
     const [p, q] = path.split("?"); const f = parseQuery(q); const body = opts.body && typeof opts.body === "string" ? JSON.parse(opts.body) : null; const method = (opts.method || "GET").toUpperCase();
     let mm;
-    if (p === "/api/meta") return { prefectures: PREFS.map((x) => ({ ...x })), regions: REGIONS, license_types: LICENSE_TYPES, colors: COLORS, sexes: SEXES, conditions: CONDITIONS, age_bands: AGE_BAND_LABELS, scenarios: SCENARIOS, scale: scale(), ai_enabled: !!apiKey(), ai_model: AI_MODEL, n: D.n };
+    if (p === "/api/meta") return { prefectures: PREFS.map((x) => ({ ...x })), regions: REGIONS, license_types: LICENSE_TYPES, colors: COLORS, sexes: SEXES, conditions: CONDITIONS, age_bands: AGE_BAND_LABELS, scenarios: SCENARIOS, scale: scale(), ai_enabled: !!apiKey(), ai_model: model(), n: D.n };
     if (p === "/api/summary") return summary(f);
     if ((mm = p.match(/^\/api\/breakdown\/(\w+)$/))) return { dimension: mm[1], rows: breakdown(f, mm[1]) };
     if (p === "/api/crosstab") return crosstab(f, f.row, f.col);
@@ -377,5 +387,5 @@ window.Engine = (() => {
     throw new Error("unknown route " + path);
   }
 
-  return { api, generate, load, reset, imageBlob, exportCsv, parseQuery, apiKey, setApiKey, get n() { return D.n; }, AI_MODEL };
+  return { api, generate, load, reset, imageBlob, exportCsv, parseQuery, apiKey, setApiKey, model, setModel, get n() { return D.n; } };
 })();

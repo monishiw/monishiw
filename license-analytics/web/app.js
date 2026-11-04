@@ -127,10 +127,9 @@
     // オンライン時のみ背景タイルを薄く重ね、取得できなければ自動で外す。
     map = L.map('map', { zoomSnap: .25, attributionControl: true, minZoom: 4, maxZoom: 9 }).setView([37.5, 137.2], 5);
     map.attributionControl.setPrefix('境界データ: dataofjapan/land');
-    if (navigator.onLine) {
-      const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO', opacity: .45 });
-      let failed = 0; tiles.on('tileerror', () => { if (++failed >= 3 && map.hasLayer(tiles)) map.removeLayer(tiles); }); tiles.addTo(map);
-    }
+    // 背景タイル: 国土地理院 淡色地図（API キー不要）。取得できない環境では自動で外し、内蔵描画のみで表示する。
+    const tiles = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a>', opacity: .6, minNativeZoom: 5, maxNativeZoom: 18 });
+    let failed = 0; tiles.on('tileerror', () => { if (++failed >= 4 && map.hasLayer(tiles)) map.removeLayer(tiles); }); tiles.addTo(map);
     const topo = window.JAPAN_TOPO;
     geoFeatures = topojson.feature(topo, topo.objects.japan);
     geoLayer = L.geoJSON(geoFeatures, { style: () => ({ color: css('--map-border'), weight: 1, fillColor: '#ccc', fillOpacity: .9 }),
@@ -253,11 +252,16 @@
     const prio = { '高': 'bad', '中': 'warn', '低': 'ok' };
     $('#ai-out').innerHTML = `
       <div class="card ai-result">
-        <div class="chips" style="margin-bottom:8px"><span class="pill ${r.engine === 'rule-based' ? '' : 'on'}">${r.engine === 'rule-based' ? '簡易分析（ルールベース）' : 'Claude: ' + esc(r.engine)}</span>
+        <div class="chips" style="margin-bottom:8px"><span class="pill ${r.engine === 'rule-based' ? '' : 'on'}">${r.engine === 'rule-based' ? '簡易分析（ルールベース）' : 'GPT: ' + esc(r.engine)}</span>
           <span class="pill">${esc(r.context_preview.area)} / ${r.context_preview.horizon}年先 / サンプル ${fmt(r.context_preview.current_total)} 件 × ${r.context_preview.scale_factor}</span>${r.notice ? `<span class="note">${esc(r.notice)}</span>` : ''}</div>
         <h2 class="headline">${esc(r.headline)}</h2><p>${esc(r.summary)}</p>
         <table class="data"><thead><tr><th>指標</th><th class="num">現在</th><th class="num">将来</th><th>コメント</th></tr></thead><tbody>
           ${(r.key_figures || []).map((k) => `<tr><td>${esc(k.label)}</td><td class="num">${esc(k.now)}</td><td class="num">${esc(k.future)}</td><td style="white-space:normal">${esc(k.comment)}</td></tr>`).join('')}</tbody></table>
+      </div>
+      <div class="grid three" style="margin-top:14px">
+        <div class="card"><h3>保有者数の見通し <span class="sub">シナリオ別（拡大推計）</span></h3><div class="chart-box"><canvas id="ai-c-total"></canvas></div></div>
+        <div class="card"><h3>75歳以上比率 <span class="sub">シナリオ別 %</span></h3><div class="chart-box"><canvas id="ai-c-75"></canvas></div></div>
+        <div class="card"><h3>年齢構成の変化 <span class="sub">基準シナリオ</span></h3><div class="chart-box"><canvas id="ai-c-age"></canvas></div></div>
       </div>
       <div class="card" style="margin-top:14px"><h3>シナリオ</h3><div class="cards">
         ${(r.scenarios || []).map((s) => `<div class="scn"><h4>${esc(s.name)}<span class="badge blue">${esc(s.probability)}</span></h4><div class="k">前提</div>${esc(s.assumptions)}<div class="k">免許保有者の見通し</div>${esc(s.license_holder_outlook)}<div class="k">事業への影響</div>${esc(s.impact_on_business)}</div>`).join('')}</div></div>
@@ -268,6 +272,14 @@
         <div class="card"><h3>推奨アクション</h3><ol style="margin:0;padding-left:20px">${(r.recommended_actions || []).map((a) => `<li>${esc(a)}</li>`).join('')}</ol>
           <h3 style="margin-top:12px">データに関する注意</h3><ul class="note" style="margin:0;padding-left:18px">${(r.data_notes || []).map((a) => `<li>${esc(a)}</li>`).join('')}</ul></div>
       </div>`;
+    renderAICharts(r.charts);
+  }
+  function renderAICharts(c) {
+    if (!c) return; const S = SERIES();
+    chart('ai-c-total', { type: 'line', data: { labels: c.years, datasets: c.scenarios.map((s, i) => ({ label: s.name, data: s.total, borderColor: S[i], backgroundColor: S[i], pointRadius: 0, borderWidth: 2, tension: .25 })) }, options: baseOpts() });
+    chart('ai-c-75', { type: 'line', data: { labels: c.years, datasets: c.scenarios.map((s, i) => ({ label: s.name, data: s.aged75_share, borderColor: S[i], backgroundColor: S[i], pointRadius: 0, borderWidth: 2, tension: .25 })) },
+      options: baseOpts({ scales: { x: { grid: { display: false } }, y: { grid: { color: css('--line') }, ticks: { callback: (v) => v + '%' } } } }) });
+    chart('ai-c-age', { type: 'bar', data: { labels: META.age_bands, datasets: [{ label: `${c.years[0]}年`, data: META.age_bands.map((b) => c.age_now[b] || 0), backgroundColor: hexA(S[0], .45), borderRadius: 3 }, { label: `${c.years[c.years.length - 1]}年（推計）`, data: META.age_bands.map((b) => c.age_future[b] || 0), backgroundColor: S[0], borderRadius: 3 }] }, options: baseOpts() });
   }
 
   // ---------------------------------------------------------------- admin
@@ -351,14 +363,15 @@
   }
 
   // ---------------------------------------------------------------- 設定・起動
-  function updateAiPill() { const on = !!Engine.apiKey(); $('#pill-ai').textContent = on ? `AI: ${Engine.AI_MODEL}` : 'AI: 簡易モード（APIキー未設定）'; $('#pill-ai').classList.toggle('on', on); $('#ai-engine').textContent = on ? `生成AI: ${Engine.AI_MODEL}（ブラウザから直接呼び出し）` : '「AI設定」で Anthropic API キーを設定すると生成AI分析に切り替わります（未設定時はルールベースの簡易分析）'; }
+  function updateAiPill() { const on = !!Engine.apiKey(); $('#pill-ai').textContent = on ? `AI: ${Engine.model()}` : 'AI: 簡易モード（APIキー未設定）'; $('#pill-ai').classList.toggle('on', on); $('#ai-engine').textContent = on ? `生成AI: OpenAI ${Engine.model()}（ブラウザから直接呼び出し）` : '「AI設定」で OpenAI API キーを設定すると GPT による分析に切り替わります（未設定時はルールベースの簡易分析）'; }
   function openAiSettings() {
     $('#modal-body').innerHTML = `<h3>AI 設定<button class="btn sm close" id="m-close">閉じる</button></h3>
-      <div class="field"><label>Anthropic API キー</label><input type="password" id="ai-key" value="${esc(Engine.apiKey())}" placeholder="sk-ant-..."></div>
-      <p class="note" style="margin-top:8px">キーはこのブラウザの localStorage にのみ保存され、api.anthropic.com に直接送信されます（サーバーは経由しません）。共有端末では使用後に削除してください。モデル: ${Engine.AI_MODEL}</p>
+      <div class="field"><label>OpenAI API キー</label><input type="password" id="ai-key" value="${esc(Engine.apiKey())}" placeholder="sk-..."></div>
+      <div class="field" style="margin-top:8px"><label>モデル</label><input type="text" id="ai-model" value="${esc(Engine.model())}" placeholder="gpt-4.1"></div>
+      <p class="note" style="margin-top:8px">キーはこのブラウザの localStorage にのみ保存され、api.openai.com に直接送信されます（サーバーは経由しません）。共有端末では使用後に削除してください。モデルは構造化出力（JSON Schema）に対応したもの（gpt-4.1 / gpt-4o / gpt-5 系など）を指定してください。</p>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn danger" id="m-clear">削除</button><button class="btn primary" id="m-save">保存</button></div>`;
     $('#modal').classList.add('open'); $('#m-close').onclick = closeModal;
-    $('#m-save').onclick = () => { Engine.setApiKey($('#ai-key').value.trim()); updateAiPill(); closeModal(); toast('保存しました'); };
+    $('#m-save').onclick = () => { Engine.setApiKey($('#ai-key').value.trim()); Engine.setModel($('#ai-model').value.trim()); updateAiPill(); closeModal(); toast('保存しました'); };
     $('#m-clear').onclick = () => { Engine.setApiKey(''); updateAiPill(); closeModal(); toast('削除しました'); };
   }
   function openDataSettings() {

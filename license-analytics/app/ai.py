@@ -1,8 +1,8 @@
 """生成AIによるシナリオ分析。
 
-集計結果（現状 + 将来推計）と外部データ（人口推計）を Claude に渡し、
-複数シナリオ・事業機会・リスク・推奨アクションを構造化 JSON で受け取る。
-ANTHROPIC_API_KEY が無い環境ではルールベースの簡易分析にフォールバックする。
+集計結果（現状 + 将来推計）と外部データ（人口推計）を OpenAI の GPT に渡し、
+複数シナリオ・事業機会・リスク・推奨アクションを構造化 JSON（JSON Schema）で受け取る。
+OPENAI_API_KEY が無い環境ではルールベースの簡易分析にフォールバックする。
 """
 from __future__ import annotations
 
@@ -10,7 +10,11 @@ import json
 import os
 from typing import Any
 
-MODEL = os.environ.get("LICENSE_AI_MODEL", "claude-opus-5-5")
+MODEL = os.environ.get("LICENSE_AI_MODEL", "gpt-4.1")
+
+
+def ai_enabled() -> bool:
+    return bool(os.environ.get("OPENAI_API_KEY"))
 
 SYSTEM_PROMPT = """あなたは自動車関連事業（販売・整備・保険・レンタカー・教習所・モビリティサービス）の
 戦略コンサルタント兼データアナリストです。運転免許証データベースの集計結果と、
@@ -73,26 +77,22 @@ def build_context(question: str, context: dict[str, Any]) -> str:
 
 
 def analyze(question: str, context: dict[str, Any]) -> dict[str, Any]:
-    if not os.environ.get("ANTHROPIC_API_KEY") and not os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+    if not ai_enabled():
         return {"engine": "rule-based", **fallback_analysis(question, context)}
-    import anthropic
+    from openai import OpenAI
 
-    client = anthropic.Anthropic()
-    with client.messages.stream(
+    client = OpenAI()
+    resp = client.chat.completions.create(
         model=MODEL,
-        max_tokens=16000,
-        system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
-        messages=[{"role": "user", "content": build_context(question, context)}],
-        thinking={"type": "adaptive"},
-        output_config={"effort": "high", "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
-    ) as stream:
-        msg = stream.get_final_message()
-    if msg.stop_reason == "refusal":
+        messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": build_context(question, context)}],
+        response_format={"type": "json_schema", "json_schema": {"name": "scenario_analysis", "strict": True, "schema": OUTPUT_SCHEMA}},
+    )
+    choice = resp.choices[0]
+    if choice.message.refusal:
         return {"engine": "rule-based", "notice": "AI が回答を拒否したため簡易分析を表示しています。", **fallback_analysis(question, context)}
-    text = next(b.text for b in msg.content if b.type == "text")
-    data = json.loads(text)
-    data["engine"] = MODEL
-    data["usage"] = {"input_tokens": msg.usage.input_tokens, "output_tokens": msg.usage.output_tokens}
+    data = json.loads(choice.message.content)
+    data["engine"] = resp.model or MODEL
+    data["usage"] = {"input_tokens": resp.usage.prompt_tokens, "output_tokens": resp.usage.completion_tokens} if resp.usage else None
     return data
 
 
@@ -181,6 +181,6 @@ def fallback_analysis(question: str, context: dict[str, Any]) -> dict[str, Any]:
         "data_notes": [
             "免許証データはサンプル抽出のため拡大係数で母集団規模に換算しています",
             "人口推計は国立社会保障・人口問題研究所の公表値を概数化したものです",
-            "ANTHROPIC_API_KEY を設定すると生成AIによる詳細分析に切り替わります",
+            "OPENAI_API_KEY を設定すると GPT による詳細分析に切り替わります",
         ],
     }

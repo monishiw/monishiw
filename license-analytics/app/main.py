@@ -81,7 +81,7 @@ def meta():
                           "acquisition_mult": v.acquisition_mult, "population_adjust": v.population_adjust,
                           "migration_to_urban": v.migration_to_urban} for k, v in projection.PRESET_SCENARIOS.items()},
         "scale": _scale(),
-        "ai_enabled": bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")),
+        "ai_enabled": ai.ai_enabled(),
         "ai_model": ai.MODEL,
     }
 
@@ -282,6 +282,13 @@ def ai_analyze(req: AnalyzeRequest):
     except Exception as e:  # API エラー時もフォールバックで必ず結果を返す
         result = {"engine": "rule-based", "notice": f"AI 呼び出しに失敗したため簡易分析を表示しています: {type(e).__name__}: {e}",
                   **ai.fallback_analysis(req.question, context)}
+    base_years = proj["base"]["years"]
+    result["charts"] = {
+        "years": [y["year"] for y in base_years],
+        "scenarios": [{"name": p["scenario"]["name"], "total": [y["total"] for y in p["years"]], "aged75_share": [y["aged75_share"] for y in p["years"]]} for p in proj.values()],
+        "age_now": base_years[0]["age_bands"], "age_future": base_years[-1]["age_bands"],
+        "colors_now": base_years[0]["colors"], "colors_future": base_years[-1]["colors"],
+    }
     result["context_preview"] = {"area": _area_label(req), "horizon": req.horizon, "current_total": current["total"],
                                  "scale_factor": current["scale_factor"]}
     return result
